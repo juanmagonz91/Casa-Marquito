@@ -4,8 +4,6 @@ import { Product } from '../types';
 
 interface ProductCardProps {
   product: Product;
-  isFavorite: boolean;
-  onToggleFavorite: (id: string) => void;
   onAddToCart: (product: Product) => void;
   onViewDetails: (product: Product) => void;
 }
@@ -61,8 +59,6 @@ const FlyingImage: React.FC<FlyingImageProps> = ({ src, startRect, targetRect, o
 
 export const ProductCard: React.FC<ProductCardProps> = ({ 
   product, 
-  isFavorite, 
-  onToggleFavorite, 
   onAddToCart,
   onViewDetails
 }) => {
@@ -99,23 +95,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             src={product.imageUrl} 
           />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-          
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite(product.id);
-            }}
-            className={`absolute top-2 right-2 p-1.5 backdrop-blur-sm rounded-full transition-colors z-10 ${
-              isFavorite 
-                ? 'bg-red-50 text-red-500 dark:bg-red-900/30 dark:text-red-400' 
-                : 'bg-white/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-900'
-            }`}
-            aria-label={isFavorite ? "Quitar de favoritos" : "Añadir a favoritos"}
-          >
-            <span className={`material-symbols-outlined text-lg ${isFavorite ? 'font-variation-settings-fill' : ''}`} style={isFavorite ? { fontVariationSettings: "'FILL' 1" } : {}}>
-              favorite{isFavorite ? '' : '_border'}
-            </span>
-          </button>
           
           {/* Overlay Hint */}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">

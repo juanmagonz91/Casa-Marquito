@@ -1,24 +1,26 @@
 import React, { useState } from 'react';
+import { authService } from '../services/authService';
+import { Order, Address } from '../types';
 
 interface ProfileViewProps {
   onLogout: () => void;
+  orders: Order[];
+  addresses: Address[];
+  onUpdateAddresses: (addresses: Address[]) => void;
 }
 
 type ProfileSection = 'menu' | 'orders' | 'addresses';
 
-interface Address {
-  id: number;
-  label: string;
-  line1: string;
-  line2: string;
-}
-
-export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({ 
+  onLogout, 
+  orders,
+  addresses,
+  onUpdateAddresses
+}) => {
   const [currentSection, setCurrentSection] = useState<ProfileSection>('menu');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [addresses, setAddresses] = useState<Address[]>([
-    { id: 1, label: 'Casa', line1: 'Av. Reforma 123, Depto 4B', line2: 'Ciudad de México, CDMX 06600' }
-  ]);
+  
+  const user = authService.getCurrentUser();
 
   // Handler for mock interactions
   const handleFeatureNotReady = (feature: string) => {
@@ -33,7 +35,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout }) => {
       line1: `Calle Nueva ${newId}, Oficina ${newId}0`,
       line2: 'Ciudad de México, CDMX 11000'
     };
-    setAddresses([...addresses, newAddress]);
+    onUpdateAddresses([...addresses, newAddress]);
     alert('Nueva dirección añadida correctamente.');
   };
 
@@ -42,26 +44,40 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout }) => {
   const OrdersView = () => (
     <div className="space-y-4 animate-in slide-in-from-right duration-300">
       <h3 className="text-lg font-bold mb-4 px-4">Historial de Pedidos</h3>
-      {[1, 2, 3].map((order) => (
-        <div key={order} className="bg-white dark:bg-slate-800 p-4 mx-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">Pedido #{1000 + order}</span>
-            <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full font-medium">
-              Entregado
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mb-3">12 Oct 2023 • 3 Artículos</p>
-          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-3">
-            <span className="font-bold text-slate-900 dark:text-white">$45.50</span>
-            <button 
-              onClick={() => handleFeatureNotReady('Detalles del Pedido')}
-              className="text-primary text-xs font-bold hover:underline"
-            >
-              Ver detalles
-            </button>
-          </div>
+      
+      {orders.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-slate-500 dark:text-slate-400">
+           <span className="material-symbols-outlined text-4xl mb-2">shopping_bag</span>
+           <p>Aún no has realizado pedidos.</p>
         </div>
-      ))}
+      ) : (
+        orders.map((order) => (
+          <div key={order.id} className="bg-white dark:bg-slate-800 p-4 mx-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-200">Pedido #{order.id}</span>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                order.status === 'delivered' 
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                  : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+              }`}>
+                {order.status === 'pending' ? 'Pendiente Pago' : 'Entregado'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">
+              {new Date(order.date).toLocaleDateString()} • {order.items.length} Artículos
+            </p>
+            <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-3">
+              <span className="font-bold text-slate-900 dark:text-white">${order.total.toFixed(2)}</span>
+              <button 
+                onClick={() => handleFeatureNotReady('Detalles del Pedido')}
+                className="text-primary text-xs font-bold hover:underline"
+              >
+                Ver detalles
+              </button>
+            </div>
+          </div>
+        ))
+      )}
     </div>
   );
 
@@ -142,17 +158,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout }) => {
       <div className="bg-white dark:bg-slate-800 p-6 shadow-sm mb-4">
         <div className="flex items-center space-x-4">
           <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center text-primary">
-            <span className="material-symbols-outlined text-3xl">person</span>
+            <span className="material-symbols-outlined text-3xl">
+              {user?.isGuest ? 'sentiment_satisfied' : 'person'}
+            </span>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Usuario Invitado</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">usuario@ejemplo.com</p>
-            <button 
-              onClick={() => handleFeatureNotReady('Editar Perfil')}
-              className="text-primary text-xs font-bold mt-1 hover:underline text-left"
-            >
-              Editar Perfil
-            </button>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              {user?.name || 'Usuario'}
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
+              {user?.isGuest ? 'Cuenta de invitado' : (user?.email || 'Sin correo')}
+            </p>
+            {!user?.isGuest && (
+              <button 
+                onClick={() => handleFeatureNotReady('Editar Perfil')}
+                className="text-primary text-xs font-bold mt-1 hover:underline text-left"
+              >
+                Editar Perfil
+              </button>
+            )}
           </div>
         </div>
       </div>

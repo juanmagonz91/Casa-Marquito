@@ -11,6 +11,22 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
+export interface Order {
+  id: string;
+  date: string;
+  total: number;
+  status: 'pending' | 'paid' | 'shipped' | 'delivered';
+  items: CartItem[];
+  paymentMethod: string;
+}
+
+export interface Address {
+  id: number;
+  label: string;
+  line1: string;
+  line2: string;
+}
+
 export type Category = 'Todo' | 'Cocina' | 'Decoración' | 'Jardín' | 'Textil' | 'Baño';
 
 export const CATEGORIES: Category[] = ['Todo', 'Cocina', 'Decoración', 'Jardín', 'Textil', 'Baño'];

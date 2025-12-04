@@ -1,10 +1,8 @@
 
-import { Product } from '../types';
+// Estos son los datos iniciales que vivian en el frontend.
+// Ahora viven en el servidor (Backend).
 
-const API_URL = 'http://localhost:3001/api';
-
-// Fallback data in case server is offline
-const MOCK_PRODUCTS: Product[] = [
+const products = [
   {
     id: '1',
     name: 'Jarrón Cerámico',
@@ -55,36 +53,4 @@ const MOCK_PRODUCTS: Product[] = [
   },
 ];
 
-export const productService = {
-  getProducts: async (): Promise<Product[]> => {
-    try {
-      const response = await fetch(`${API_URL}/products`);
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("Backend not accessible. Using Mock Data.", error);
-      return new Promise((resolve) => {
-        setTimeout(() => resolve(MOCK_PRODUCTS), 300);
-      });
-    }
-  },
-
-  submitOrder: async (orderData: any): Promise<any> => {
-    try {
-      const response = await fetch(`${API_URL}/orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(orderData),
-      });
-      if (!response.ok) throw new Error('Failed to submit order');
-      return await response.json();
-    } catch (error) {
-      console.warn("Backend not accessible. Order saved locally only.", error);
-      return { success: true, localOnly: true };
-    }
-  }
-};
+module.exports = { products };

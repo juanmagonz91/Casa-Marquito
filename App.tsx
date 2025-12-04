@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product, CartItem, Category } from './types';
+import { Product, CartItem, Category, Order, Address } from './types';
 import { productService } from './services/productService';
 import { emailService } from './services/emailService';
 import { authService } from './services/authService';
@@ -12,7 +12,6 @@ import { ProfileView } from './components/ProfileView';
 import { CheckoutView } from './components/CheckoutView';
 import { OrderSuccessView } from './components/OrderSuccessView';
 import { ProductDetailModal } from './components/ProductDetailModal';
-import { AuthView } from './components/AuthView';
 
 // Helper to load initial state safely
 const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
@@ -32,22 +31,21 @@ const normalizeText = (text: string) => {
     .toLowerCase();
 };
 
-type ViewState = 'home' | 'catalog' | 'favorites' | 'profile' | 'checkout' | 'success';
+type ViewState = 'home' | 'catalog' | 'profile' | 'checkout' | 'success';
 
 const App: React.FC = () => {
-  // --- Auth State ---
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-
   // --- Data State ---
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Persisted States
   const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage('cart', []));
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    const stored = loadFromStorage<string[]>('favorites', []);
-    return new Set(stored);
-  });
+  const [orders, setOrders] = useState<Order[]>(() => loadFromStorage('orders', []));
+  
+  // Also load addresses here to pass down
+  const [addresses, setAddresses] = useState<Address[]>(() => loadFromStorage('addresses', [
+     { id: 1, label: 'Casa', line1: 'Av. Reforma 123, Depto 4B', line2: 'Ciudad de México, CDMX 06600' }
+  ]));
 
   // UI States
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,19 +57,14 @@ const App: React.FC = () => {
 
   // --- Effects ---
 
-  // Check Auth Status on Mount
+  // Initialize App (Auto-login guest & fetch products)
   useEffect(() => {
-    const user = authService.getCurrentUser();
-    if (user) {
-      setIsAuthenticated(true);
-    }
-  }, []);
-  
-  // Fetch Products
-  useEffect(() => {
-    if (!isAuthenticated) return; // Only fetch if logged in
-    
-    const fetchProducts = async () => {
+    const initApp = async () => {
+      // Ensure we have a guest session for profile compatibility
+      if (!authService.getCurrentUser()) {
+        await authService.loginAsGuest();
+      }
+
       try {
         const data = await productService.getProducts();
         setProducts(data);
@@ -81,8 +74,9 @@ const App: React.FC = () => {
         setLoading(false);
       }
     };
-    fetchProducts();
-  }, [isAuthenticated]);
+    
+    initApp();
+  }, []);
 
   // Persistence Effects
   useEffect(() => {
@@ -90,27 +84,25 @@ const App: React.FC = () => {
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('favorites', JSON.stringify(Array.from(favorites)));
-  }, [favorites]);
+    localStorage.setItem('orders', JSON.stringify(orders));
+  }, [orders]);
+
+  useEffect(() => {
+    localStorage.setItem('addresses', JSON.stringify(addresses));
+  }, [addresses]);
 
   // --- Logic / Handlers ---
 
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
-    // Reload products or reset view if needed
-    setLoading(true);
-    productService.getProducts().then(data => {
-      setProducts(data);
-      setLoading(false);
-    });
-  };
-
   const handleLogout = () => {
+    // In a non-login app, "Logout" just clears local data
     authService.logout();
-    setIsAuthenticated(false);
     setCart([]);
-    setFavorites(new Set());
+    setOrders([]);
+    setAddresses([]); // Clear addresses
+    // Re-initialize guest immediately
+    authService.loginAsGuest();
     setCurrentView('home');
+    alert("Se han borrado tus datos locales.");
   };
 
   const handleAddToCart = (product: Product) => {
@@ -156,7 +148,31 @@ const App: React.FC = () => {
     const total = subtotal + shipping;
     const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // 2. Recommendation Logic: Find products NOT in the cart
+    // 2. Create Order Object
+    const newOrder: Order = {
+      id: orderId,
+      date: new Date().toISOString(),
+      total: total,
+      status: 'pending', // Default for bank transfer
+      items: [...cart],
+      paymentMethod: 'Transferencia Bancaria'
+    };
+    
+    // Add extra customer data for backend
+    const fullOrderPayload = {
+      ...newOrder,
+      customerName: shippingData.name,
+      customerEmail: shippingData.email,
+      shippingAddress: shippingData
+    };
+
+    // 3. Send to Backend
+    await productService.submitOrder(fullOrderPayload);
+
+    // 4. Save Order Locally (for Profile view)
+    setOrders(prev => [newOrder, ...prev]);
+
+    // 5. Recommendation Logic: Find products NOT in the cart
     const candidates = products.filter(p => !cart.some(c => c.id === p.id));
     // Shuffle and pick 3
     const recommendations = candidates
@@ -165,7 +181,7 @@ const App: React.FC = () => {
     
     setLastRecommendations(recommendations);
 
-    // 3. Generate Email (Simulated)
+    // 6. Generate Email (Simulated)
     await emailService.sendOrderConfirmation({
       orderId,
       customerName: shippingData.name,
@@ -175,22 +191,10 @@ const App: React.FC = () => {
       shippingCost: shipping
     }, recommendations);
 
-    // 4. Clear and Redirect
+    // 7. Clear and Redirect
     setCart([]); // Clear cart
     setCurrentView('success');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleToggleFavorite = (id: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
   };
 
   const handleCategorySelectFromHome = (category: Category) => {
@@ -203,10 +207,6 @@ const App: React.FC = () => {
   
   const displayedProducts = useMemo(() => {
     let filtered = products;
-
-    if (currentView === 'favorites') {
-      filtered = filtered.filter(p => favorites.has(p.id));
-    }
 
     return filtered.filter((product) => {
       // 1. Prepare search terms
@@ -226,7 +226,7 @@ const App: React.FC = () => {
         return matchesSearch;
       }
     });
-  }, [products, selectedCategory, searchQuery, currentView, favorites]);
+  }, [products, selectedCategory, searchQuery]);
 
   // Check if we are showing products from other categories during a search
   const hasCrossCategoryResults = useMemo(() => {
@@ -239,12 +239,7 @@ const App: React.FC = () => {
     return cart.reduce((acc, item) => acc + item.quantity, 0);
   }, [cart]);
 
-  // --- Auth Guard ---
-  if (!isAuthenticated) {
-    return <AuthView onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  // --- Authenticated App ---
+  // --- App Render ---
 
   // Main Content Renderer
   const renderContent = () => {
@@ -280,12 +275,17 @@ const App: React.FC = () => {
     if (currentView === 'profile') {
       return (
         <div className="max-w-3xl mx-auto w-full">
-          <ProfileView onLogout={handleLogout} />
+          <ProfileView 
+            orders={orders} 
+            onLogout={handleLogout} 
+            addresses={addresses}
+            onUpdateAddresses={setAddresses}
+          />
         </div>
       );
     }
 
-    // Catalog & Favorites View
+    // Catalog View
     return (
       <main className="px-4 pb-24 flex-grow max-w-7xl mx-auto w-full">
         {/* Cross Category Warning Banner */}
@@ -313,8 +313,6 @@ const App: React.FC = () => {
               <ProductCard
                 key={product.id}
                 product={product}
-                isFavorite={favorites.has(product.id)}
-                onToggleFavorite={handleToggleFavorite}
                 onAddToCart={handleAddToCart}
                 onViewDetails={setViewedProduct}
               />
@@ -323,21 +321,11 @@ const App: React.FC = () => {
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-600">
             <span className="material-symbols-outlined text-4xl mb-2">
-              {currentView === 'favorites' ? 'favorite_border' : 'search_off'}
+              search_off
             </span>
             <p>
-              {currentView === 'favorites' 
-                ? 'No tienes favoritos aún' 
-                : 'No se encontraron productos'}
+              No se encontraron productos
             </p>
-            {currentView === 'favorites' && (
-              <button 
-                onClick={() => setCurrentView('catalog')}
-                className="mt-4 text-primary font-medium text-sm hover:underline"
-              >
-                Explorar catálogo
-              </button>
-            )}
           </div>
         )}
       </main>
@@ -383,8 +371,7 @@ const App: React.FC = () => {
                 </button>
               )}
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate">
-                {currentView === 'favorites' ? 'Mis Favoritos' : 
-                 currentView === 'profile' ? 'Mi Perfil' : 
+                {currentView === 'profile' ? 'Mi Perfil' : 
                  currentView === 'home' ? 'Inicio' : 
                  currentView === 'checkout' ? 'Checkout' :
                  'Catálogo'}
@@ -468,12 +455,6 @@ const App: React.FC = () => {
               label="Catálogo" 
               active={currentView === 'catalog'} 
               onClick={() => setCurrentView('catalog')}
-            />
-            <NavItem 
-              icon="favorite" 
-              label="Favoritos" 
-              active={currentView === 'favorites'} 
-              onClick={() => setCurrentView('favorites')}
             />
             <NavItem 
               icon="person" 

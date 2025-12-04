@@ -50,6 +50,18 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    try {
+      await authService.loginAsGuest();
+      onLoginSuccess();
+    } catch (error) {
+      console.error("Error login guest", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     if (error) setError('');
@@ -159,7 +171,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               disabled={loading}
               className="w-full py-3.5 mt-2 bg-primary text-background-dark font-bold rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2"
             >
-              {loading ? (
+              {loading && !error ? (
                 <div className="w-5 h-5 border-2 border-background-dark border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
@@ -169,6 +181,24 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               )}
             </button>
           </form>
+
+          {/* Guest Login Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white dark:bg-slate-900 text-slate-500">O</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleGuestLogin}
+            disabled={loading}
+            className="w-full py-3 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <span>Entrar como invitado</span>
+          </button>
 
           {isLogin && (
             <div className="mt-6 text-center">

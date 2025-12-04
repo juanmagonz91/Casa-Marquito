@@ -3,6 +3,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  isGuest?: boolean;
 }
 
 export const authService = {
@@ -20,7 +21,8 @@ export const authService = {
         const mockUser: User = {
           id: 'user-123',
           name: email.split('@')[0], // Usar parte del correo como nombre si no existe
-          email: email
+          email: email,
+          isGuest: false
         };
         
         // Guardar sesión simulada
@@ -36,11 +38,27 @@ export const authService = {
         const newUser: User = {
           id: `user-${Date.now()}`,
           name,
-          email
+          email,
+          isGuest: false
         };
         localStorage.setItem('user_session', JSON.stringify(newUser));
         resolve(newUser);
       }, 1500);
+    });
+  },
+
+  loginAsGuest: async (): Promise<User> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const guestUser: User = {
+          id: 'guest',
+          name: 'Invitado',
+          email: '',
+          isGuest: true
+        };
+        localStorage.setItem('user_session', JSON.stringify(guestUser));
+        resolve(guestUser);
+      }, 800);
     });
   },
 
